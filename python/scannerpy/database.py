@@ -1328,13 +1328,15 @@ class Database(object):
                         }
                     n = op._name
                     enumerator_info = self._get_enumerator_info(n)
-                    if len(args) > 0:
+                    full_args = {**op._args, **args}
+                    if len(full_args) > 0:
                         if len(enumerator_info.protobuf_name) > 0:
                             enumerator_proto_name = enumerator_info.protobuf_name
                             source_input.enumerator_args = python_to_proto(
-                                self.protobufs, enumerator_proto_name, args)
+                                self.protobufs, enumerator_proto_name,
+                                full_args)
                         else:
-                            source_input.enumerator_args = args
+                            source_input.enumerator_args = full_args
                 elif op in sampling_slicing_ops:
                     op_idx = sampling_slicing_ops[op]
                     saa = j.sampling_args_assignment.add()
