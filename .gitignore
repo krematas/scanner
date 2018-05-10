@@ -19,3 +19,4 @@ docker/**/thirdparty
 
 python/scannerpy/include
 dist
+.idea/
