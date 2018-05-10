@@ -1,10 +1,14 @@
-
 import grpc
 import copy
 import pickle
+import types
 
 from scannerpy.common import *
 from scannerpy.protobuf_generator import python_to_proto
+from typing import Dict, List, Union, Tuple, Optional, Sequence
+from inspect import signature
+from itertools import islice
+from collections import OrderedDict
 
 
 class OpColumn:
@@ -76,6 +80,7 @@ class OpColumn:
         new_col._encode_options = encode_options
         return new_col
 
+PYTHON_OP_REGISTRY = {}
 
 class OpGenerator:
     """
@@ -90,6 +95,24 @@ class OpGenerator:
         self._db = db
 
     def __getattr__(self, name):
+        # Check python registry for Op
+        if name in PYTHON_OP_REGISTRY:
+            py_op_info = PYTHON_OP_REGISTRY[name]
+            # If Op has not been registered yet, register it
+            if not name in self._db._python_ops:
+                self._db.register_op(
+                    name,
+                    py_op_info['input_columns'],
+                    py_op_info['output_columns'],
+                    py_op_info['variadic_inputs'],
+                    py_op_info['stencil'],
+                    py_op_info['unbounded_state'],
+                    py_op_info['proto_path'])
+                self._db.register_python_kernel(
+                    name,
+                    py_op_info['device_type'],
+                    py_op_info['kernel'],
+                    py_op_info['batch'])
 
         # This will raise an exception if the op does not exist.
         op_info = self._db._get_op_info(name)
@@ -206,3 +229,195 @@ class Op:
             e.kernel_args = self._args.SerializeToString()
 
         return e
+
+
+def register_python_op(
+        name: str = None,
+        stencil: List[int] = None,
+        unbounded_state: bool = False,
+        bounded_state: int = None,
+        device_type: DeviceType = DeviceType.CPU,
+        batch: int = 1,
+        proto_path: str = None):
+    def dec(fn_or_class):
+        is_fn = False
+        if isinstance(fn_or_class, types.FunctionType) or isinstance(
+                      fn_or_class, types.BuiltinFunctionType):
+            is_fn = True
+
+        if name is None:
+            # Infer name from fn_or_class name
+            kname = fn_or_class.__name__
+        else:
+            kname = name
+
+        can_stencil = stencil is not None
+        can_batch = batch > 1
+
+        # Get execute function to determine input and output types
+        if is_fn:
+            exec_fn = fn_or_class
+        else:
+            exec_fn = getattr(fn_or_class, "execute", None)
+            if not callable(exec_fn):
+                raise ScannerException(
+                    ('Attempted to register Python Op with name {:s}, but that '
+                     'provided class has no "execute" method.').format(kname))
+
+        input_columns = []
+        has_variadic_inputs = False
+        sig = signature(exec_fn)
+
+        fn_params = sig.parameters
+        if is_fn:
+            # If this is a fn kernel, then the first argument should be `config`
+            fn_params = OrderedDict(islice(fn_params.items(), 1, None))
+        else:
+            # If this is a class kernel, then first argument should be self
+            fn_params = OrderedDict(islice(fn_params.items(), 1, None))
+
+        def parse_annotation_to_column_type(typ, is_input=False):
+            if can_batch:
+                # If the op can batch, then we expect the types to be
+                # Sequence[T], where T = {bytes, FrameType}
+                if (not getattr(typ, '__origin__', None) or
+                    typ.__origin__ != Sequence):
+                    raise ScannerException(
+                        ('A batched Op must specify a "Sequence" type '
+                         'annotation for each input and output.'))
+                typ = typ.__args__[0]
+
+            if is_input and can_stencil:
+                # If the op can stencil, then we expect the input types to be
+                # Sequence[T], where T = {bytes, FrameType}
+                if (not getattr(typ, '__origin__', None) or
+                    typ.__origin__ != Sequence):
+                    raise ScannerException(
+                        ('A stenciled Op must specify a "Sequence" type '
+                         'annotation for each input. If the Op both stencils '
+                         'and batches, then it should have the type '
+                         '"Sequence[Sequence[T]], where T = {bytes, FrameType}.'
+                        ))
+                typ = typ.__args__[0]
+
+            if typ == param.empty:
+                raise ScannerException(
+                    ('No type annotation specified for input {:s}. Must '
+                     'specify an annotation of "bytes" or "FrameType".')
+                    .format(param_name))
+            if typ == bytes:
+                column_type = ColumnType.Blob
+            elif typ == FrameType:
+                column_type = ColumnType.Video
+            else:
+                raise ScannerException(
+                    ('Invalid type annotation specified for input {:s}. Must '
+                     'specify an annotation of type "bytes" or '
+                     '"FrameType".')
+                    .format(param_name))
+            return column_type
+
+        # Analyze exec_fn parameters to determine the input types
+        for param_name, param in fn_params.items():
+            # We only allow keyword arguments and *args.
+            # There is no support currently for positional or **kwargs
+            kind = param.kind
+            if (kind == param.POSITIONAL_ONLY or
+                kind == param.VAR_KEYWORD):
+                raise ScannerException(
+                    ('Positional arguments and **kwargs are currently not '
+                     'supported for the "execute" method of kernels'))
+
+            if kind == param.VAR_POSITIONAL:
+                # This means we have variadic inputs
+                has_variadic_inputs = True
+                if len(fn_params) > 1:
+                    raise ScannerException(
+                        ('Variadic positional inputs (*args) are not supported '
+                         'when used with other inputs.'))
+                break
+
+            typ = param.annotation
+            column_type = parse_annotation_to_column_type(typ, is_input=True)
+            input_columns.append((param_name, column_type))
+
+        output_columns = []
+        # Analyze exec_fn return type to determine output types
+        typ = sig.return_annotation
+        if typ == sig.empty:
+            raise ScannerException(
+                ('Return annotation must be specified for "execute" method.'))
+
+        return_is_tuple = True
+        if getattr(typ, '__origin__', None) == Tuple:
+            if getattr(typ, '__tuple_params__', None):
+                # Python 3.5
+                use_ellipsis = typ.__tuple_use_ellipsis__
+                tuple_params = typ.__tuple_params__
+            elif getattr(typ, '__args__', None):
+                # Python 3.6+
+                use_ellipsis = typ.__args__[-1] is Ellipsis
+                tuple_params = typ.__args__[:-1 if use_ellipsis else None]
+            else:
+                raise ScannerException('This should not happen...')
+        else:
+            use_ellipsis = False
+            return_is_tuple = False
+            tuple_params = [typ]
+
+        if use_ellipsis:
+            raise ScannerException(
+                ('Ellipsis tuples not supported for return type.'))
+
+        for i, typ in enumerate(tuple_params):
+            column_type = parse_annotation_to_column_type(typ)
+            output_columns.append(('ret{:d}'.format(i), column_type))
+
+        if kname in PYTHON_OP_REGISTRY:
+            raise ScannerException(
+                'Attempted to register Op with name {:s} twice'.format(kname))
+
+        def parse_ret(r):
+            if return_is_tuple:
+                return r
+            else:
+                return (r,)
+
+        # Wrap exec_fn to destructure input and outputs to proper python inputs
+        if is_fn:
+            if has_variadic_inputs:
+                def wrapper_exec(config, in_cols):
+                    return parse_ret(exec_fn(config, *in_cols))
+            else:
+                def wrapper_exec(config, in_cols):
+                    args = {}
+                    for (param_name, _), c in zip(input_columns, in_cols):
+                        args[param_name] = c
+                    return parse_ret(exec_fn(config, **args))
+            fn_or_class = wrapper_exec
+        else:
+            if has_variadic_inputs:
+                def execute(self, in_cols):
+                    return parse_ret(exec_fn(self, *in_cols))
+            else:
+                def execute(self, in_cols):
+                    args = {}
+                    for (param_name, _), c in zip(input_columns, in_cols):
+                        args[param_name] = c
+                    return parse_ret(exec_fn(self, **args))
+            fn_or_class.execute = execute
+
+        PYTHON_OP_REGISTRY[kname] = {
+            'input_columns': input_columns,
+            'output_columns': output_columns,
+            'variadic_inputs': has_variadic_inputs,
+            'stencil': stencil,
+            'unbounded_state': unbounded_state,
+            'bounded_state': bounded_state,
+            'kernel': fn_or_class,
+            'device_type': device_type,
+            'batch': batch,
+            'proto_path': proto_path,
+        }
+        return fn_or_class
+    return dec

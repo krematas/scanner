@@ -1,6 +1,8 @@
-from scannerpy import (Database, Config, DeviceType, ColumnType, Job,
-                       ProtobufGenerator, ScannerException)
+import scannerpy
+from scannerpy import (Database, Config, DeviceType, FrameType, Job,
+                       ProtobufGenerator, ScannerException, Kernel)
 from scannerpy.stdlib import readers
+from typing import Dict, List, Sequence, Tuple
 import tempfile
 import toml
 import pytest
@@ -656,11 +658,33 @@ def test_files_sink(db):
             assert d == i
 
 
-def test_python_kernel(db):
-    db.register_op('TestPy', [('frame', ColumnType.Video)], ['dummy'])
-    db.register_python_kernel('TestPy', DeviceType.CPU,
-                              cwd + '/test_py_kernel.py')
+@scannerpy.register_python_op()
+class TestPy(Kernel):
+    def __init__(self, config):
+        self.protobufs = config.protobufs
+        assert (config.args['kernel_arg'] == 1)
+        self.x = 20
+        self.y = 20
 
+    def close(self):
+        pass
+
+    def new_stream(self, args):
+        if args is None:
+            return
+        if 'x' in args:
+            self.x = args['x']
+        if 'y' in args:
+            self.y = args['y']
+
+    def execute(self, frame: FrameType) -> bytes:
+        point = {}
+        point['x'] = self.x
+        point['y'] = self.y
+        return pickle.dumps(point)
+
+
+def test_python_kernel(db):
     frame = db.sources.FrameColumn()
     range_frame = frame.sample()
     test_out = db.ops.TestPy(frame=range_frame, kernel_arg=1)
@@ -676,14 +700,25 @@ def test_python_kernel(db):
     next(tables[0].load(['dummy']))
 
 
-def test_python_batch_kernel(db):
-    db.register_op('TestPyBatch', [('frame', ColumnType.Video)], ['dummy'])
-    db.register_python_kernel(
-        'TestPyBatch',
-        DeviceType.CPU,
-        cwd + '/test_py_batch_kernel.py',
-        batch=10)
+@scannerpy.register_python_op(batch=50)
+class TestPyBatch(Kernel):
+    def __init__(self, config):
+        self.protobufs = config.protobufs
+        pass
 
+    def close(self):
+        pass
+
+    def execute(self, frame: Sequence[FrameType]) -> Sequence[bytes]:
+        point = self.protobufs.Point()
+        point.x = 10
+        point.y = 5
+        input_count = len(frame)
+        column_count = 1
+        return [point.SerializeToString() for _ in range(input_count)]
+
+
+def test_python_batch_kernel(db):
     frame = db.sources.FrameColumn()
     range_frame = frame.sample()
     test_out = db.ops.TestPyBatch(frame=range_frame, batch=50)
@@ -699,14 +734,75 @@ def test_python_batch_kernel(db):
     next(tables[0].load(['dummy']))
 
 
-def test_bind_op_args(db):
-    try:
-        db.register_op('TestPy', [('frame', ColumnType.Video)], ['dummy'])
-        db.register_python_kernel('TestPy', DeviceType.CPU,
-                                  cwd + '/test_py_kernel.py')
-    except ScannerException:
+@scannerpy.register_python_op(stencil=[0, 1])
+class TestPyStencil(Kernel):
+    def __init__(self, config):
+        self.protobufs = config.protobufs
         pass
 
+    def close(self):
+        pass
+
+    def execute(self, frame: Sequence[FrameType]) -> bytes:
+        assert len(frame) == 2
+        point = self.protobufs.Point()
+        point.x = 10
+        point.y = 5
+        return point.SerializeToString()
+
+
+def test_python_stencil_kernel(db):
+    frame = db.sources.FrameColumn()
+    range_frame = frame.sample()
+    test_out = db.ops.TestPyStencil(frame=range_frame)
+    output_op = db.sinks.Column(columns={'dummy': test_out})
+    job = Job(
+        op_args={
+            frame: db.table('test1').column('frame'),
+            range_frame: db.sampler.range(0, 30),
+            output_op: 'test_hist'
+        })
+
+    tables = db.run(output_op, [job], force=True, show_progress=False)
+    next(tables[0].load(['dummy']))
+
+
+@scannerpy.register_python_op(stencil=[0, 1], batch=50)
+class TestPyStencilBatch(Kernel):
+    def __init__(self, config):
+        self.protobufs = config.protobufs
+        pass
+
+    def close(self):
+        pass
+
+    def execute(self, frame: Sequence[Sequence[FrameType]]) -> Sequence[bytes]:
+        assert len(frame[0]) == 2
+        point = self.protobufs.Point()
+        point.x = 10
+        point.y = 5
+        input_count = len(frame)
+        column_count = 1
+        return [point.SerializeToString() for _ in range(input_count)]
+
+
+def test_python_stencil_batch_kernel(db):
+    frame = db.sources.FrameColumn()
+    range_frame = frame.sample()
+    test_out = db.ops.TestPyStencilBatch(frame=range_frame, batch=50)
+    output_op = db.sinks.Column(columns={'dummy': test_out})
+    job = Job(
+        op_args={
+            frame: db.table('test1').column('frame'),
+            range_frame: db.sampler.range(0, 30),
+            output_op: 'test_hist'
+        })
+
+    tables = db.run(output_op, [job], force=True, show_progress=False)
+    next(tables[0].load(['dummy']))
+
+
+def test_bind_op_args(db):
     frame = db.sources.FrameColumn()
     range_frame = frame.sample()
     test_out = db.ops.TestPy(frame=range_frame, kernel_arg=1)
@@ -1094,10 +1190,22 @@ def blacklist_db():
 
 
 def test_job_blacklist(blacklist_db):
+    # NOTE(wcrichto): this class must NOT be at the top level. If it is, then pytest injects
+    # some of its dependencies, and sending this class to an external Scanner process will fail
+    # with a missing "py_test" import..
+    @scannerpy.register_python_op()
+    class TestPyFail(Kernel):
+        def __init__(self, config):
+            self.protobufs = config.protobufs
+            pass
+
+        def close(self):
+            pass
+
+        def execute(self, frame: FrameType) -> bytes:
+            raise ScannerException('Test')
+
     db = blacklist_db
-    db.register_op('TestPyFail', [('frame', ColumnType.Video)], ['dummy'])
-    db.register_python_kernel('TestPyFail', DeviceType.CPU,
-                              cwd + '/test_py_fail_kernel.py')
 
     frame = db.sources.FrameColumn()
     range_frame = frame.sample()

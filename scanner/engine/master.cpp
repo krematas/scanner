@@ -716,17 +716,15 @@ grpc::Status MasterImpl::RegisterPythonKernel(
   {
     const std::string& op_name = python_kernel->op_name();
     DeviceType device_type = python_kernel->device_type();
-    const std::string& kernel_str = python_kernel->kernel_str();
+    const std::string& kernel_code = python_kernel->kernel_code();
     const std::string& pickled_config = python_kernel->pickled_config();
     const int batch_size = python_kernel->batch_size();
-    // Create a kernel builder function
-    auto constructor = [op_name, kernel_str, pickled_config,
-                        batch_size](const KernelConfig& config) {
-      return new PythonKernel(config, op_name, kernel_str, pickled_config, batch_size);
-    };
+
     // Set all input and output columns to be CPU
     std::map<std::string, DeviceType> input_devices;
     std::map<std::string, DeviceType> output_devices;
+    bool can_batch = batch_size > 1;
+    bool can_stencil;
     {
       OpRegistry* registry = get_op_registry();
       OpInfo* info = registry->get_op_info(op_name);
@@ -740,9 +738,17 @@ grpc::Status MasterImpl::RegisterPythonKernel(
       for (const auto& out_col : info->output_columns()) {
         output_devices[out_col.name()] = DeviceType::CPU;
       }
+      can_stencil = info->can_stencil();
     }
+
+    // Create a kernel builder function
+    auto constructor = [op_name, kernel_code, pickled_config,
+                        can_batch, can_stencil](const KernelConfig& config) {
+      return new PythonKernel(config, op_name, kernel_code, pickled_config,
+                              can_batch, can_stencil);
+    };
+
     // Create a new kernel factory
-    bool can_batch = (batch_size > 1);
     KernelFactory* factory =
         new KernelFactory(op_name, device_type, 1, input_devices,
                           output_devices, can_batch, batch_size, constructor);
@@ -1122,14 +1128,6 @@ void MasterImpl::recover_and_init_database() {
   VLOG(1) << "Setting up table metadata cache";
   // Setup table metadata cache
   table_metas_.reset(new TableMetaCache(storage_, meta_));
-
-  // std::vector<std::string> valid_table_names;
-  // for (const auto& name : meta_.table_names()) {
-  //   i32 table_id = meta_.get_table_id(name);
-  //   if (!meta_.table_is_committed(table_id)) {
-  //     //
-  //   }
-  // }
 
   // Prefetch table metadata for all tables
   if (meta_.table_names().size() > 0 &&

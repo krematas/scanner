@@ -20,6 +20,14 @@ PreEvaluateWorker::PreEvaluateWorker(const PreEvaluateWorkerArgs& args)
     profiler_(args.profiler) {
 }
 
+PreEvaluateWorker::~PreEvaluateWorker() {
+  for (auto& encoded_data : decode_args_) {
+    for (auto& args : encoded_data) {
+      delete_buffer(CPU_DEVICE, (u8*)args.encoded_video());
+    }
+  }
+}
+
 void PreEvaluateWorker::feed(EvalWorkEntry& work_entry, bool first) {
   auto feed_start = now();
 
@@ -111,6 +119,11 @@ void PreEvaluateWorker::feed(EvalWorkEntry& work_entry, bool first) {
   media_col_idx = 0;
   auto setup_start = now();
   // Deserialize all decode args into protobufs
+  for (auto& encoded_data : decode_args_) {
+    for (auto& args : encoded_data) {
+      delete_buffer(CPU_DEVICE, (u8*)args.encoded_video());
+    }
+  }
   decode_args_.clear();
   for (size_t c = 0; c < work_entry.columns.size(); ++c) {
     if (work_entry.column_types[c] == ColumnType::Video &&
@@ -841,7 +854,7 @@ void EvaluateWorker::feed(EvalWorkEntry& work_entry) {
 
         // Setup output buffers to receive op output
         BatchedElements output_columns;
-        output_columns.resize(num_output_columns);
+        output_columns.resize(kernel_num_outputs_[k]);
 
         // Map from previous output columns to the set of input columns needed
         // by the kernel
