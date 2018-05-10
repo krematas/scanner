@@ -2,8 +2,6 @@ from scannerpy import Database, DeviceType, Job, ColumnType
 from scannerpy.stdlib import pipelines
 
 import subprocess
-import cv2
-import sys
 import os.path
 import examples.util
 import numpy as np
