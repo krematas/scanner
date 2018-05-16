@@ -33,3 +33,4 @@ job = Job(op_args={
     output_op: 'example_resized',
 })
 db.run(output_op, [job], force=True)
+print('Finished!')

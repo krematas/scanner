@@ -3,6 +3,8 @@
 
 cmake_minimum_required(VERSION 3.2.0 FATAL_ERROR)
 
+include_directories(/home/krematas/code/scanner/thirdparty/build/protobuf/src)
+
 execute_process(
   OUTPUT_VARIABLE SCANNER_CMAKE_PATH
   COMMAND python -c "import scannerpy.stdlib.build_flags as b; b.print_cmake()")
