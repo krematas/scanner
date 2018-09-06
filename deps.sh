@@ -592,13 +592,14 @@ if [[ $INSTALL_STOREHOUSE == true ]] && [[ ! -f $BUILD_DIR/storehouse.done ]] ; 
     rm -fr storehouse
     git clone https://github.com/scanner-research/storehouse && \
         cd storehouse && \
-        git checkout v0.6.2 && \
+        git checkout v0.6.3 && \
         cd thirdparty && mkdir build && cd build && \
         cmake .. -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX -DCMAKE_BUILD_TYPE=RelWithDebInfo && \
         make -j${cores} && cd ../../ && \
         mkdir build && cd build && \
         cmake .. -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX -DCMAKE_BUILD_TYPE=RelWithDebInfo && \
-        make install -j${cores} && cd .. && ./build.sh && \
+        make install -j${cores} && cd .. && \
+        CPATH=$INSTALL_PREFIX/include LD_LIBRARY_PATH=$INSTALL_PREFIX/lib ./build.sh && \
         touch $BUILD_DIR/storehouse.done \
             || { echo 'Installing storehouse failed!' ; exit 1; }
     echo "Done installing storehouse"
