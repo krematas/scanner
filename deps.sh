@@ -667,7 +667,7 @@ if [[ $INSTALL_CAFFE == true ]] && [[ $USE_GPU == false ]] && \
               -DOpenCV_DIR=$OPENCV_DIR \
               -DBUILD_python=OFF \
               -Dpython_version=3 \
-              -DBLAS=mkl \
+              -DBLAS=atlas \
               .. && \
         make -j${cores} && \
         make install && \
@@ -686,17 +686,17 @@ if [[ $INSTALL_CAFFE == true ]] && \
     cd $BUILD_DIR
     # Intel MKL
 
-    if [[ "$OSTYPE" == "linux-gnu" ]]; then
-        rm -fr mkl
-        mkdir mkl && \
-            cd mkl && \
-            wget http://registrationcenter-download.intel.com/akdlm/irc_nas/tec/12414/l_mkl_2018.1.163.tgz && \
-            tar -zxf l_mkl_2018.1.163.tgz && \
-            cp $FILES_DIR/mkl/silent.cfg silent.cfg && \
-            echo "PSET_INSTALL_DIR=$INSTALL_PREFIX/intel" >> silent.cfg && \
-            cd l_mkl_2018.1.163 && \
-            bash install.sh --cli-mode --silent ../silent.cfg
-    fi
+    # if [[ "$OSTYPE" == "linux-gnu" ]]; then
+    #     rm -fr mkl
+    #     mkdir mkl && \
+    #         cd mkl && \
+    #         wget http://registrationcenter-download.intel.com/akdlm/irc_nas/tec/12414/l_mkl_2018.1.163.tgz && \
+    #         tar -zxf l_mkl_2018.1.163.tgz && \
+    #         cp $FILES_DIR/mkl/silent.cfg silent.cfg && \
+    #         echo "PSET_INSTALL_DIR=$INSTALL_PREFIX/intel" >> silent.cfg && \
+    #         cd l_mkl_2018.1.163 && \
+    #         bash install.sh --cli-mode --silent ../silent.cfg
+    # fi
 
     if [[ $USE_GPU == true ]]; then
         CPU_ONLY=OFF
@@ -716,7 +716,7 @@ if [[ $INSTALL_CAFFE == true ]] && \
               -DCMAKE_PREFIX_PATH=$INSTALL_PREFIX \
               -DINTEL_ROOT=$INSTALL_PREFIX/intel \
               -DCPU_ONLY=$CPU_ONLY \
-              -DBLAS=mkl \
+              -DBLAS=atlas \
               -DBUILD_python=OFF \
               -Dpython_version=3 \
               -DCUDA_ARCH_NAME="Manual" \
