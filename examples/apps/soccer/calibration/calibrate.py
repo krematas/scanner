@@ -25,13 +25,13 @@ class CalibrationClass(scannerpy.Kernel):
 
     # execute is the core computation routine maps inputs to outputs, e.g. here resizes an input
     # frame to a smaller output frame.
-    def execute(self, frame: FrameType) -> FrameType:
+    def execute(self, frame: FrameType, mask: FrameType) -> FrameType:
         edge_sfactor = 0.5
-        edges = utils.robust_edge_detection(cv2.resize(columns[0], None, fx=edge_sfactor, fy=edge_sfactor))
+        edges = utils.robust_edge_detection(cv2.resize(frame, None, fx=edge_sfactor, fy=edge_sfactor))
         edges = cv2.resize(edges, None, fx=1. / edge_sfactor, fy=1. / edge_sfactor)
         edges = cv2.Canny(edges.astype(np.uint8) * 255, 100, 200) / 255.0
 
-        mask = cv2.dilate(columns[1][:, :, 0], np.ones((25, 25), dtype=np.uint8))
+        mask = cv2.dilate(mask[:, :, 0], np.ones((25, 25), dtype=np.uint8))
 
         edges = edges * (1 - mask)
         dist_transf = cv2.distanceTransform((1 - edges).astype(np.uint8), cv2.DIST_L2, 0)
@@ -45,7 +45,7 @@ class CalibrationClass(scannerpy.Kernel):
 
         self._A, self._R, self._T = utils.calibrate_camera_dist_transf(self._A, self._R, self._T, dist_transf, field3d)
 
-        rgb = columns[0].copy()
+        rgb = frame.copy()
         canvas, mask = utils.draw_field(self._A, self._R, self._T, self._h, self._w)
         canvas = cv2.dilate(canvas.astype(np.uint8), np.ones((15, 15), dtype=np.uint8)).astype(float)
         rgb = rgb * (1 - canvas)[:, :, None] + np.dstack((canvas * 255, np.zeros_like(canvas), np.zeros_like(canvas)))
@@ -53,7 +53,7 @@ class CalibrationClass(scannerpy.Kernel):
         # result = np.dstack((template, template, template))*255
 
         out = rgb.astype(np.uint8)
-        return [out]
+        return out
 
 
 
@@ -72,7 +72,7 @@ print('Failures:', failed)
 cam_data = np.load('/home/krematas/Mountpoints/grail/data/barcelona/calib/00114.npy').item()
 
 
-db.register_op('Calibrate', [('frame', ColumnType.Video), ('mask', ColumnType.Video)], [('resized', ColumnType.Video)])
+# db.register_op('Calibrate', [('frame', ColumnType.Video), ('mask', ColumnType.Video)], [('resized', ColumnType.Video)])
 
 # Custom Python kernels for ops reside in a separate file, here calibrate_kernel.py.
 # cwd = '/home/krematas/code/scanner/examples/apps/soccer'
