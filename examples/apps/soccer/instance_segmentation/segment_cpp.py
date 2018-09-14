@@ -8,16 +8,7 @@ import subprocess
 from os.path import join
 import numpy as np
 import glob
-
-
-@scannerpy.register_python_op()
-class MyResizeClass(scannerpy.Kernel):
-    def __init__(self, config):
-        self._w = config.args['w']
-        self._h = config.args['h']
-
-    def execute(self, image: FrameType, mask: FrameType) -> FrameType:
-        return cv2.resize((image*(mask/255.)).astype(np.uint8), (self._w, self._h))
+import os
 
 
 dataset = '/home/krematas/Mountpoints/grail/data/barcelona/'
@@ -30,6 +21,23 @@ mask_files.sort()
 mask_files = mask_files[:100]
 
 db = Database()
+
+cwd = os.path.dirname(os.path.abspath(__file__))
+if not os.path.isfile(os.path.join(cwd, 'resize_op/build/libresize_op.so')):
+    print(
+        'You need to build the custom op first: \n'
+        '$ pushd {}/segment_op; mkdir build && cd build; cmake ..; make; popd'.
+        format(cwd))
+    exit()
+
+# To load a custom op into the Scanner runtime, we use db.load_op to open the
+# shared library we compiled. If the op takes arguments, it also optionally
+# takes a path to the generated python file for the arg protobuf.
+db.load_op(
+    os.path.join(cwd, 'segment_op/build/libsegment_op.so'),
+    os.path.join(cwd, 'segment_op/build/resize_pb2.py'))
+
+
 
 encoded_image = db.sources.Files()
 frame = db.ops.ImageDecoder(img=encoded_image)

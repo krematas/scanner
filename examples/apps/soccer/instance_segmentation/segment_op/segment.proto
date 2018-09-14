@@ -1,0 +1,6 @@
+syntax = "proto3";
+
+message MySegmentArgs {
+  int32 w = 1;
+  int32 h = 2;
+}
