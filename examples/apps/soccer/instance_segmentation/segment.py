@@ -40,10 +40,8 @@ output_op = db.sinks.FrameColumn(columns={'frame': my_resize_imageset_class})
 
 job = Job(
     op_args={
-        encoded_image: {'paths': ['/home/krematas/Mountpoints/grail/data/barcelona/players/images/00114_00010.jpg',
-                                  '/home/krematas/Mountpoints/grail/data/barcelona/players/images/00114_00008.jpg']},
-        encoded_mask: {'paths': ['/home/krematas/Mountpoints/grail/data/barcelona/players/masks/00114_00010.png',
-                                  '/home/krematas/Mountpoints/grail/data/barcelona/players/masks/00114_00008.png']},
+        encoded_image: {'paths': image_files},
+        encoded_mask: {'paths': mask_files},
 
         output_op: 'example_resized',
     })
