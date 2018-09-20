@@ -9,7 +9,7 @@
 
 include(FindPackageHandleStandardArgs)
 
-set(NVCUVID_ROOT_DIR "" CACHE PATH "Folder contains NVCUVID")
+set(NVCUVID_ROOT_DIR "/usr/lib/nvidia-396" CACHE PATH "Folder contains NVCUVID")
 
 if (NOT "$ENV{NVCUVID_DIR}" STREQUAL "")
   set(NVCUVID_ROOT_DIR
@@ -18,7 +18,7 @@ endif()
 
 find_library(NVCUVID_LIBRARY nvcuvid
   PATHS
-  ${NVCUVID_ROOT_DIR}/lib
+  /usr/lib/nvidia-396
   /usr/local/cuda/lib64)
 
 find_package_handle_standard_args(NVCUVID DEFAULT_MSG NVCUVID_LIBRARY)

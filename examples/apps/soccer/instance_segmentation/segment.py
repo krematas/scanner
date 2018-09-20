@@ -23,11 +23,11 @@ class MyResizeClass(scannerpy.Kernel):
 dataset = '/home/krematas/Mountpoints/grail/data/barcelona/'
 image_files = glob.glob(join(dataset, 'players', 'images', '*.jpg'))
 image_files.sort()
-image_files = image_files[:100]
+image_files = image_files[:10]
 
 mask_files = glob.glob(join(dataset, 'players', 'masks', '*.png'))
 mask_files.sort()
-mask_files = mask_files[:100]
+mask_files = mask_files[:10]
 
 db = Database()
 
@@ -47,5 +47,6 @@ job = Job(
 
         output_op: 'example_resized',
     })
+
 [out_table] = db.run(output_op, [job], force=True)
 out_table.column('frame').save_mp4('haha')

@@ -16,8 +16,19 @@ build_op(
   CPP_SRCS segment_op.cpp
   PROTO_SRC segment.proto)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+
+# Eigen
+set(MIN_EIGEN_VERSION 3.2.0)
+find_package(Eigen ${MIN_EIGEN_VERSION} REQUIRED)
+if (EIGEN_FOUND)
+    message("-- Found Eigen version ${EIGEN_VERSION}: ${EIGEN_INCLUDE_DIRS}")
+endif (EIGEN_FOUND)
+
 # The library specified in build_op is a normal CMake target, so you can use all
 # the normal CMake functions with it.
-find_package(OpenCV REQUIRED COMPONENTS core imgproc)
-include_directories(SYSTEM ${OpenCV_INCLUDE_DIRS})
+find_package(OpenCV REQUIRED)
+find_package(Boost 1.45.0 COMPONENTS filesystem regex program_options)
+
+include_directories(SYSTEM ${OpenCV_INCLUDE_DIRS} ${EIGEN_INCLUDE_DIRS} ${Boost_INCLUDE_DIRS})
 target_link_libraries(segment_op PUBLIC "${OpenCV_LIBRARIES}")
