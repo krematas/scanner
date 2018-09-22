@@ -5,9 +5,6 @@ Use lr=0.01 for current version
 '''
 import torch.nn as nn
 import torch.nn.functional as F
-import torch
-import math
-from torch.autograd import Variable
 
 __all__ = ['HourglassNet', 'hg1', 'hg2', 'hg4', 'hg8']
 

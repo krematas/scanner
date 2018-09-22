@@ -1,9 +1,8 @@
 import torch
 import numpy as np
-from scipy.misc import imread, imresize, imsave, imrotate
+from scipy.misc import imresize, imrotate
 from torchvision import transforms
 import scipy.ndimage
-import utils.io as io
 
 __all__ = ['NormalizeImage', 'ColorOffset', 'Rescale', 'RandomCrop', 'RandomRotation', 'ToTensor', 'LabelToVolume']
 

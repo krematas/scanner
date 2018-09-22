@@ -1,7 +1,6 @@
 import scannerpy
-import cv2
 import numpy as np
-
+import os
 from scannerpy import Database, DeviceType, Job, ColumnType, FrameType
 
 from os.path import join
@@ -9,19 +8,28 @@ import glob
 
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
 from torchvision import transforms
 
 from hourglass import hg8
 import matplotlib.pyplot as plt
 from scipy.misc import imresize
 
+import argparse
+
+# Testing settings
+parser = argparse.ArgumentParser(description='Depth estimation using Stacked Hourglass')
+parser.add_argument('--path_to_data', default='/home/krematas/Mountpoints/grail/data/barcelona/')
+parser.add_argument('--path_to_model', default='/home/krematas/Mountpoints/grail/tmp/cnn/model.pth')
+parser.add_argument('--visualize', action='store_true')
+
+opt, _ = parser.parse_known_args()
+
 
 @scannerpy.register_python_op()
 class MyDepthEstimationClass(scannerpy.Kernel):
     def __init__(self, config):
 
-        checkpoint = torch.load('/home/krematas/Mountpoints/grail/tmp/cnn/model.pth')
+        checkpoint = torch.load( config.args['model_path'])
         netG_state_dict = checkpoint['state_dict']
         netG = hg8(input_nc=4, output_nc=51)
         netG.load_state_dict(netG_state_dict)
@@ -68,7 +76,7 @@ class MyDepthEstimationClass(scannerpy.Kernel):
         return np_prediction.astype(np.float32)
 
 
-dataset = '/home/krematas/Mountpoints/grail/data/barcelona/'
+dataset = opt.path_to_data
 image_files = glob.glob(join(dataset, 'players', 'images', '*.jpg'))
 image_files.sort()
 image_files = image_files[:20]
@@ -82,6 +90,8 @@ pred_files.sort()
 pred_files = pred_files[:20]
 
 
+model_path = opt.path_to_model
+
 db = Database()
 
 encoded_image = db.sources.Files()
@@ -91,7 +101,8 @@ encoded_mask = db.sources.Files()
 mask_frame = db.ops.ImageDecoder(img=encoded_mask)
 
 
-my_depth_estimation_class = db.ops.MyDepthEstimationClass(image=frame, mask=mask_frame, img_size=256)
+my_depth_estimation_class = db.ops.MyDepthEstimationClass(image=frame, mask=mask_frame,
+                                                          img_size=256, model_path=model_path)
 output_op = db.sinks.FrameColumn(columns={'frame': my_depth_estimation_class})
 
 job = Job(
@@ -106,15 +117,20 @@ job = Job(
 
 results = out_table.column('frame').load()
 
+path_to_save = join(dataset, 'players', 'prediction_scanner')
+if not os.path.exists(path_to_save):
+    os.mkdir(path_to_save)
 
 for i, res in enumerate(results):
-    pred = np.load(pred_files[i])[0, :, :, :]
-    pred = np.argmax(pred, axis=0)
-    fig, ax = plt.subplots(1, 2)
-
     pred_scanner = np.argmax(res, axis=0)
+    np.save(join(path_to_save, '{0:05d}.npy'.format(i)), res)
 
-    ax[1].imshow(pred)
-    ax[0].imshow(pred_scanner)
-    plt.show()
-# out_table.column('frame').save_mp4('haha')
+    if opt.visualize:
+        # Visualization
+        pred = np.load(pred_files[i])[0, :, :, :]
+        pred = np.argmax(pred, axis=0)
+        fig, ax = plt.subplots(1, 2)
+
+        ax[1].imshow(pred)
+        ax[0].imshow(pred_scanner)
+        plt.show()

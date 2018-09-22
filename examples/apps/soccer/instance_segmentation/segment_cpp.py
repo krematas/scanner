@@ -10,8 +10,16 @@ import numpy as np
 import glob
 import os
 
+import argparse
 
-dataset = '/home/krematas/Mountpoints/grail/data/barcelona/'
+
+parser = argparse.ArgumentParser(description='Depth estimation using Stacked Hourglass')
+parser.add_argument('--path_to_data', default='/home/krematas/Mountpoints/grail/data/barcelona/')
+parser.add_argument('--visualize', action='store_true')
+opt, _ = parser.parse_known_args()
+
+
+dataset = opt.path_to_data
 image_files = glob.glob(join(dataset, 'players', 'images', '*.jpg'))
 image_files.sort()
 image_files = image_files[:10]
@@ -38,14 +46,13 @@ db.load_op(
     os.path.join(cwd, 'segment_op/build/segment_pb2.py'))
 
 
-
 encoded_image = db.sources.Files()
 frame = db.ops.ImageDecoder(img=encoded_image)
 
 encoded_mask = db.sources.Files()
 mask_frame = db.ops.ImageDecoder(img=encoded_mask)
 
-my_segment_imageset_class = db.ops.MySegment(frame=frame, mask=mask_frame, w=60, h=60, sigma1=1.0, sigma2=0.01)
+my_segment_imageset_class = db.ops.MySegment(frame=frame, mask=mask_frame, w=128, h=128, sigma1=1.0, sigma2=0.01)
 output_op = db.sinks.FrameColumn(columns={'frame': my_segment_imageset_class})
 
 job = Job(
@@ -56,4 +63,4 @@ job = Job(
         output_op: 'example_resized',
     })
 [out_table] = db.run(output_op, [job], force=True)
-out_table.column('frame').save_mp4('haha_cpp')
+out_table.column('frame').save_mp4(join(dataset, 'players', 'instance_segm.mp4'))
