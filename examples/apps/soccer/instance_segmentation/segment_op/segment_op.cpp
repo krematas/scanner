@@ -208,12 +208,12 @@ class MySegmentKernel : public scanner::Kernel, public scanner::VideoKernel {
 
     image.convertTo(image, cv::DataType<var_t>::type, 1.0/255.0);
     var_t *imgData = (var_t*)(image.data);
-    std::cout<<image.channels()<<std::endl;
+//    std::cout<<image.channels()<<std::endl;
 
 
     poseImage.convertTo(poseImage, cv::DataType<var_t>::type);
     var_t *poseData = (var_t*)(poseImage.data);
-    std::cout<<poseImage.channels()<<std::endl;
+//    std::cout<<poseImage.channels()<<std::endl;
     //
     cv::Mat img2;
     image.copyTo(img2);
@@ -221,9 +221,9 @@ class MySegmentKernel : public scanner::Kernel, public scanner::VideoKernel {
     cv::Mat edges(img2.size(), img2.type());
 
     pDollar->detectEdges(img2, edges);
-    std::cout<<edges.channels()<<std::endl;
+//    std::cout<<edges.channels()<<std::endl;
 
-    std::cout<<" -------------------------- "<<std::endl<<std::endl;
+//    std::cout<<" -------------------------- "<<std::endl<<std::endl;
     int height = image.rows;
     int width = image.cols;
 
