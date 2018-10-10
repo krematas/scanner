@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 from scipy.misc import imresize
 
 import argparse
+import time
 
 # Testing settings
 parser = argparse.ArgumentParser(description='Depth estimation using Stacked Hourglass')
@@ -113,7 +114,12 @@ job = Job(
         output_op: 'example_resized',
     })
 
+start = time.time()
 [out_table] = db.run(output_op, [job], force=True)
+end = time.time()
+
+print('Total time for instance segmentation in scanner: {0:.3f} sec'.format(end-start))
+
 
 results = out_table.column('frame').load()
 

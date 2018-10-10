@@ -3,10 +3,9 @@ import cv2
 import numpy as np
 from scannerpy import Database, DeviceType, Job, ColumnType, FrameType
 from scannerpy.stdlib import pipelines
+import time
 
-import subprocess
 from os.path import join
-import numpy as np
 import glob
 import os
 
@@ -62,5 +61,10 @@ job = Job(
 
         output_op: 'example_resized',
     })
+
+start = time.time()
 [out_table] = db.run(output_op, [job], force=True)
-out_table.column('frame').save_mp4(join(dataset, 'players', 'instance_segm.mp4'))
+end = time.time()
+
+print('Total time for instance segmentation in scanner: {0:.3f} sec'.format(end-start))
+# out_table.column('frame').save_mp4(join(dataset, 'players', 'instance_segm.mp4'))
