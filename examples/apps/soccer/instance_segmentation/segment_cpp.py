@@ -21,11 +21,9 @@ opt, _ = parser.parse_known_args()
 dataset = opt.path_to_data
 image_files = glob.glob(join(dataset, 'players', 'images', '*.jpg'))
 image_files.sort()
-image_files = image_files[:10]
 
 mask_files = glob.glob(join(dataset, 'players', 'poseimgs', '*.png'))
 mask_files.sort()
-mask_files = mask_files[:10]
 
 db = Database()
 
