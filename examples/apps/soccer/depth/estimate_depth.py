@@ -118,7 +118,7 @@ start = time.time()
 [out_table] = db.run(output_op, [job], force=True)
 end = time.time()
 
-print('Total time for instance segmentation in scanner: {0:.3f} sec'.format(end-start))
+print('Total time for depth estimation in scanner: {0:.3f} sec'.format(end-start))
 
 
 results = out_table.column('frame').load()
