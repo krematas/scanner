@@ -80,15 +80,12 @@ class MyDepthEstimationClass(scannerpy.Kernel):
 dataset = opt.path_to_data
 image_files = glob.glob(join(dataset, 'players', 'images', '*.jpg'))
 image_files.sort()
-image_files = image_files[:20]
 
 mask_files = glob.glob(join(dataset, 'players', 'masks', '*.png'))
 mask_files.sort()
-mask_files = mask_files[:20]
 
 pred_files = glob.glob(join(dataset, 'players', 'predictions', '*.npy'))
 pred_files.sort()
-pred_files = pred_files[:20]
 
 
 model_path = opt.path_to_model
