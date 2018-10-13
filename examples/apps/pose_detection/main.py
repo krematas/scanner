@@ -64,10 +64,14 @@ job = Job(
         encoded_image: {'paths': image_files},
         output_op: 'example_resized',
     })
+
+print('Estimate poses')
 start = time.time()
-[out_table] = db.run(output_op, [job], force=True)
+[out_table] = db.run(output_op, [job], force=True, work_packet_size=8, io_packet_size=64,
+                     pipeline_instances_per_node=pipeline_instances)
 end = time.time()
 
+print('Total time for pose estimation in scanner: {0:.3f} sec'.format(end-start))
 
 
 
