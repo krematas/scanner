@@ -84,8 +84,8 @@ image_files.sort()
 mask_files = glob.glob(join(dataset, 'players', 'masks', '*.png'))
 mask_files.sort()
 
-pred_files = glob.glob(join(dataset, 'players', 'predictions', '*.npy'))
-pred_files.sort()
+# pred_files = glob.glob(join(dataset, 'players', 'predictions', '*.npy'))
+# pred_files.sort()
 
 
 model_path = opt.path_to_model
@@ -128,12 +128,12 @@ for i, res in enumerate(results):
     pred_scanner = np.argmax(res, axis=0)
     np.save(join(path_to_save, '{0:05d}.npy'.format(i)), res)
 
-    if opt.visualize:
-        # Visualization
-        pred = np.load(pred_files[i])[0, :, :, :]
-        pred = np.argmax(pred, axis=0)
-        fig, ax = plt.subplots(1, 2)
-
-        ax[1].imshow(pred)
-        ax[0].imshow(pred_scanner)
-        plt.show()
+    # if opt.visualize:
+    #     # Visualization
+    #     pred = np.load(pred_files[i])[0, :, :, :]
+    #     pred = np.argmax(pred, axis=0)
+    #     fig, ax = plt.subplots(1, 2)
+    #
+    #     ax[1].imshow(pred)
+    #     ax[0].imshow(pred_scanner)
+    #     plt.show()
