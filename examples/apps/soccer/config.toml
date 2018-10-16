@@ -1,0 +1,4 @@
+[storage]
+type = "gcs"
+bucket = "scanner-data"
+db_path = "test/soccer_db"

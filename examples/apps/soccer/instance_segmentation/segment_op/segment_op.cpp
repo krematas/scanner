@@ -151,8 +151,6 @@ var_t* segmentFromPoses(var_t *img, var_t *edges, var_t *poseData, int height, i
 }
 
 
-cv::Ptr<cv::ximgproc::StructuredEdgeDetection> pDollar = cv::ximgproc::createStructuredEdgeDetection("/home/krematas/code/soccerontable/soccer3d/instancesegm/model.yml.gz");
-
 /*
  * Ops in Scanner are abstract units of computation that are implemented by
  * kernels. Kernels are pinned to a specific device (CPU or GPU). Here, we
@@ -181,6 +179,8 @@ class MySegmentKernel : public scanner::Kernel, public scanner::VideoKernel {
     height_ = args.h();
     sigma1 = args.sigma1();
     sigma2 = args.sigma2();
+    pDollar_ = cv::ximgproc::createStructuredEdgeDetection(
+        args.model_path());
   }
 
   // Execute is the core computation of the kernel. It maps a batch of rows
@@ -220,7 +220,7 @@ class MySegmentKernel : public scanner::Kernel, public scanner::VideoKernel {
     img2.convertTo(img2, cv::DataType<var_t>::type);
     cv::Mat edges(img2.size(), img2.type());
 
-    pDollar->detectEdges(img2, edges);
+    pDollar_->detectEdges(img2, edges);
 //    std::cout<<edges.channels()<<std::endl;
 
 //    std::cout<<" -------------------------- "<<std::endl<<std::endl;
@@ -263,6 +263,7 @@ class MySegmentKernel : public scanner::Kernel, public scanner::VideoKernel {
   }
 
  private:
+  cv::Ptr<cv::ximgproc::StructuredEdgeDetection> pDollar_;
   int width_;
   int height_;
   float sigma1;

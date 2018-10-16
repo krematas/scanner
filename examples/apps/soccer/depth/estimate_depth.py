@@ -16,21 +16,26 @@ from scipy.misc import imresize
 
 import argparse
 import time
+import subprocess as sp
 
 # Testing settings
 parser = argparse.ArgumentParser(description='Depth estimation using Stacked Hourglass')
 parser.add_argument('--path_to_data', default='/home/krematas/Mountpoints/grail/data/barcelona/')
 parser.add_argument('--path_to_model', default='/home/krematas/Mountpoints/grail/tmp/cnn/model.pth')
 parser.add_argument('--visualize', action='store_true')
+parser.add_argument('--cloud', action='store_true')
+parser.add_argument('--bucket', default='', type=str)
 
 opt, _ = parser.parse_known_args()
 
 
-@scannerpy.register_python_op()
+@scannerpy.register_python_op(device_type=DeviceType.GPU)
 class MyDepthEstimationClass(scannerpy.Kernel):
     def __init__(self, config):
-
-        checkpoint = torch.load( config.args['model_path'])
+        if opt.cloud:
+           checkpoint = torch.load('model.pth')
+        else:
+            checkpoint = torch.load( config.args['model_path'])
         netG_state_dict = checkpoint['state_dict']
         netG = hg8(input_nc=4, output_nc=51)
         netG.load_state_dict(netG_state_dict)
@@ -76,43 +81,81 @@ class MyDepthEstimationClass(scannerpy.Kernel):
 
         return np_prediction.astype(np.float32)
 
-
 dataset = opt.path_to_data
-image_files = glob.glob(join(dataset, 'players', 'images', '*.jpg'))
+
+if opt.cloud:
+    def get_paths(path):
+        paths = sp.check_output('gsutil ls gs://{:s}/{:s}'.format(opt.bucket, path),
+                                shell=True).strip().decode('utf-8')
+        paths = paths.split('\n')
+        prefix_len = len('gs://{:s}'.format(opt.bucket))
+        stripped_paths = [p[prefix_len:] for p in paths]
+        return stripped_paths
+    image_files = get_paths(join(dataset, 'players', 'images', '*.jpg'))
+    mask_files = get_paths(join(dataset, 'players', 'masks', '*.png'))
+else:
+    image_files = glob.glob(join(dataset, 'players', 'images', '*.jpg'))
+    mask_files = glob.glob(join(dataset, 'players', 'masks', '*.png'))
+
 image_files.sort()
-
-mask_files = glob.glob(join(dataset, 'players', 'masks', '*.png'))
 mask_files.sort()
-
-# pred_files = glob.glob(join(dataset, 'players', 'predictions', '*.npy'))
-# pred_files.sort()
-
 
 model_path = opt.path_to_model
 
-db = Database()
+if opt.cloud:
+    print('Finding master IP...')
+    ip = sp.check_output(
+        '''
+    kubectl get pods -l 'app=scanner-master' -o json | \
+    jq '.items[0].spec.nodeName' -r | \
+    xargs -I {} kubectl get nodes/{} -o json | \
+    jq '.status.addresses[] | select(.type == "ExternalIP") | .address' -r
+    ''',
+        shell=True).strip().decode('utf-8')
+    
+    port = sp.check_output(
+        '''
+    kubectl get svc/scanner-master -o json | \
+    jq '.spec.ports[0].nodePort' -r
+    ''',
+        shell=True).strip().decode('utf-8')
 
-encoded_image = db.sources.Files()
+    master = '{}:{}'.format(ip, port)
+    print(master)
+    db = Database(master=master, start_cluster=False, config_path='./config.toml',
+                  grpc_timeout=60)
+else:
+    db = Database()
+    
+
+
+config = db.config.config['storage']
+params = {'bucket': opt.bucket,
+          'storage_type': config['type'],
+          'endpoint': 'storage.googleapis.com',
+          'region': 'US'}
+
+encoded_image = db.sources.Files(**params)
 frame = db.ops.ImageDecoder(img=encoded_image)
 
-encoded_mask = db.sources.Files()
+encoded_mask = db.sources.Files(**params)
 mask_frame = db.ops.ImageDecoder(img=encoded_mask)
 
 
 my_depth_estimation_class = db.ops.MyDepthEstimationClass(image=frame, mask=mask_frame,
-                                                          img_size=256, model_path=model_path)
+                                                          img_size=256, model_path=model_path,
+                                                          device=DeviceType.GPU)
 output_op = db.sinks.FrameColumn(columns={'frame': my_depth_estimation_class})
 
 job = Job(
     op_args={
-        encoded_image: {'paths': image_files},
-        encoded_mask: {'paths': mask_files},
-
-        output_op: 'example_resized',
+        encoded_image: {'paths': image_files, **params},
+        encoded_mask: {'paths': mask_files, **params},
+        output_op: 'example_resized5',
     })
 
 start = time.time()
-[out_table] = db.run(output_op, [job], force=True)
+[out_table] = db.run(output_op, [job], force=True, work_packet_size=8, io_packet_size=16)
 end = time.time()
 
 print('Total time for depth estimation in scanner: {0:.3f} sec'.format(end-start))
