@@ -1,4 +1,4 @@
 [storage]
 type = "gcs"
-bucket = "scanner-data"
+bucket = "krematas-data"
 db_path = "test/soccer_db"
