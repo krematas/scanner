@@ -9,6 +9,7 @@ import argparse
 import pickle
 
 import time
+# import pycocotools.mask as mask_util
 
 parser = argparse.ArgumentParser(description='Depth estimation using Stacked Hourglass')
 parser.add_argument('--path_to_data', default='/home/krematas/Mountpoints/grail/data/barcelona/')
@@ -16,6 +17,26 @@ parser.add_argument('--visualize', action='store_true')
 parser.add_argument('--cloud', action='store_true')
 parser.add_argument('--bucket', default='', type=str)
 opt, _ = parser.parse_known_args()
+
+
+# @scannerpy.register_python_op(name='DetectronInstSegm')
+# def get_instances_from_detectron(config,
+#                                  frame: FrameType,
+#                                  boxes: bytes,
+#                                  segms: bytes,):
+#     boxes = pickle.loads(boxes)
+#     segms = pickle.loads(segms)
+#
+#     areas = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
+#     sorted_inds = np.argsort(-areas)
+#
+#     instance_map = np.zeros((frame.shape[0], frame.shape[1]))
+#
+#     for ii, i in enumerate(sorted_inds):
+#         masks = mask_util.decode(segms[i])
+#         instance_map += (masks * (ii + 1))
+#
+#     return instance_map
 
 
 @scannerpy.register_python_op()
@@ -31,6 +52,7 @@ class DrawPosesClass(scannerpy.Kernel):
     def execute(self, image: FrameType, poses: bytes) -> FrameType:
 
         poses = pickle.loads(poses)
+        print(poses)
         # output = np.zeros((self.h, self.w, 3), dtype=np.float32) - 1
         output = image
         for i in range(len(poses)):
@@ -69,7 +91,6 @@ image_files = glob.glob(join(dataset, 'images', '*.jpg'))
 image_files.sort()
 
 
-
 db = Database()
 
 config = db.config.config['storage']
@@ -84,15 +105,33 @@ frame = db.ops.ImageDecoder(img=encoded_image)
 with open(join(dataset, 'metadata', 'poses.p'), 'rb') as f:
     openposes = pickle.load(f)
 
+frame_names = list(openposes.keys())
+frame_names.sort()
 
-draw_poses_class = db.ops.DrawPosesClass(image=frame, poses=openposes, h=2160, w=3840, device=DeviceType.CPU)
+pose_data = []
+for fname in frame_names:
+    pose_data.append(openposes[fname])
+
+# aaa = pickle.dumps(pose_data)
+# bbb = pickle.loads(aaa)
+
+data = db.sources.Python()
+pass_data = db.ops.Pass(input=data)
+
+
+draw_poses_class = db.ops.DrawPosesClass(image=frame, poses=pass_data, h=2160, w=3840, device=DeviceType.CPU)
 output_op = db.sinks.FrameColumn(columns={'frame': draw_poses_class})
 
 job = Job(
     op_args={
         encoded_image: {'paths': image_files, **params},
+        data: {
+            'data': pickle.dumps(pose_data)
+        },
         output_op: 'example_resized5',
     })
+
+print('Here')
 
 start = time.time()
 [out_table] = db.run(output_op, [job], force=True, work_packet_size=8, io_packet_size=16)
