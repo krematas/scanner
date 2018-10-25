@@ -115,7 +115,7 @@ for fname in frame_names:
     poses_in_frame = np.zeros((n_poses, 18, 3), dtype=np.float32)
     for i in range(n_poses):
         poses_in_frame[i, :, :] = openposes[fname][i]
-    data = {'data': poses_in_frame[0, :, :]}
+    data = {'data': poses_in_frame[0:10, :, :]}
     pose_data.append(data)
     # pose_data.append({'1'})
 
