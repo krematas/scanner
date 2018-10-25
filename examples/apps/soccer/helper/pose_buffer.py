@@ -55,32 +55,32 @@ class DrawPosesClass(scannerpy.Kernel):
         # output = np.zeros((self.h, self.w, 3), dtype=np.float32)
         output = image.copy()
         poses = pickle.loads(poses)
-        # poses = poses[None, :, :]
-        # for i in range(poses.shape[0]):
-        #     keypoints = poses[i, :, :]
-        #
-        #     lbl = i+200
-        #     for k in range(self.limps.shape[0]):
-        #         kp1, kp2 = self.limps[k, :].astype(int)
-        #         bone_start = keypoints[kp1, :]
-        #         bone_end = keypoints[kp2, :]
-        #         bone_start[0] = np.maximum(np.minimum(bone_start[0], self.w - 1), 0.)
-        #         bone_start[1] = np.maximum(np.minimum(bone_start[1], self.h - 1), 0.)
-        #
-        #         bone_end[0] = np.maximum(np.minimum(bone_end[0], self.w - 1), 0.)
-        #         bone_end[1] = np.maximum(np.minimum(bone_end[1], self.h - 1), 0.)
-        #
-        #         if bone_start[2] > 0.0:
-        #             output[int(bone_start[1]), int(bone_start[0])] = 1
-        #             cv2.circle(output, (int(bone_start[0]), int(bone_start[1])), 2, (lbl, 0, 0), -1)
-        #
-        #         if bone_end[2] > 0.0:
-        #             output[int(bone_end[1]), int(bone_end[0])] = 1
-        #             cv2.circle(output, (int(bone_end[0]), int(bone_end[1])), 2, (lbl, 0, 0), -1)
-        #
-        #         if bone_start[2] > 0.0 and bone_end[2] > 0.0:
-        #             cv2.line(output, (int(bone_start[0]), int(bone_start[1])), (int(bone_end[0]), int(bone_end[1])),
-        #                      (lbl, 0, 0), 1)
+        poses = poses['data']
+        for i in range(poses.shape[0]):
+            keypoints = poses[i, :, :]
+
+            lbl = i+200
+            for k in range(self.limps.shape[0]):
+                kp1, kp2 = self.limps[k, :].astype(int)
+                bone_start = keypoints[kp1, :]
+                bone_end = keypoints[kp2, :]
+                bone_start[0] = np.maximum(np.minimum(bone_start[0], self.w - 1), 0.)
+                bone_start[1] = np.maximum(np.minimum(bone_start[1], self.h - 1), 0.)
+
+                bone_end[0] = np.maximum(np.minimum(bone_end[0], self.w - 1), 0.)
+                bone_end[1] = np.maximum(np.minimum(bone_end[1], self.h - 1), 0.)
+
+                if bone_start[2] > 0.0:
+                    output[int(bone_start[1]), int(bone_start[0])] = 1
+                    cv2.circle(output, (int(bone_start[0]), int(bone_start[1])), 2, (lbl, 0, 0), -1)
+
+                if bone_end[2] > 0.0:
+                    output[int(bone_end[1]), int(bone_end[0])] = 1
+                    cv2.circle(output, (int(bone_end[0]), int(bone_end[1])), 2, (lbl, 0, 0), -1)
+
+                if bone_start[2] > 0.0 and bone_end[2] > 0.0:
+                    cv2.line(output, (int(bone_start[0]), int(bone_start[1])), (int(bone_end[0]), int(bone_end[1])),
+                             (lbl, 0, 0), 1)
 
         return output.astype(np.uint8)
 
