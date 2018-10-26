@@ -556,15 +556,18 @@ if [[ $INSTALL_HALIDE == true ]] && [[ ! -f $BUILD_DIR/halide.done ]] ; then
                 || { echo 'Installing Halide failed!' ; exit 1; }
     elif [[ "$OSTYPE" == "darwin"* ]]; then
         TAR_NAME=halide-mac-64-trunk-46d8e9e0cdae456489f1eddfd6d829956fc3c843.tgz
-        wget https://github.com/halide/Halide/releases/download/release_2018_02_15/$TAR_NAME && \
-            wget https://raw.githubusercontent.com/halide/Halide/release_2018_02_15/src/Generator.h && \
+        wget --retry-on-http-error=403 https://github.com/halide/Halide/releases/download/release_2018_02_15/$TAR_NAME && \
+            wget --retry-on-http-error=403 https://raw.githubusercontent.com/halide/Halide/release_2018_02_15/src/Generator.h && \
             tar -zxf $TAR_NAME && \
+            cp Generator.h halide/include && \
             mkdir -p $INSTALL_PREFIX/lib && \
+            find ./halide -type f -exec chmod 644 {} + && \
+            find ./halide -type d -exec chmod 755 {} + && \
+            find ./halide/bin -type f -exec chmod 755 {} + && \
             cp -r halide/bin/* $INSTALL_PREFIX/lib && \
             rm -r halide/bin && \
             cp -r halide/* $INSTALL_PREFIX && \
             install_name_tool -id "@rpath/libHalide.dylib" $INSTALL_PREFIX/lib/libHalide.dylib
-            cp Generator.h halide/include && \
             touch $BUILD_DIR/halide.done \
                 || { echo 'Installing Halide failed!' ; exit 1; }
     fi
@@ -610,7 +613,8 @@ if [[ $INSTALL_GOOGLETEST == true ]] && [[ ! -f $BUILD_DIR/googletest.done ]]; t
     cd $BUILD_DIR
     rm -fr googletest
     git clone https://github.com/google/googletest && \
-        cd googletest && mkdir build && cd build && \
+        cd googletest && git checkout release-1.8.1 && \
+        mkdir build && cd build && \
         cmake .. -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX && \
         make -j${cores} && make install && \
         touch $BUILD_DIR/googletest.done \

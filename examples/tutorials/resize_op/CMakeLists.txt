@@ -7,7 +7,7 @@ include_directories(/home/krematas/code/scanner/thirdparty/build/protobuf/src)
 
 execute_process(
   OUTPUT_VARIABLE SCANNER_CMAKE_PATH
-  COMMAND python -c "import scannerpy.stdlib.build_flags as b; b.print_cmake()")
+  COMMAND python3 -c "import scannerpy.stdlib.build_flags as b; b.print_cmake()")
 include(${SCANNER_CMAKE_PATH})
 
 # build_op will create a shared library called lib${LIB_NAME}.so that builds

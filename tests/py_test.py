@@ -37,21 +37,20 @@ slow = pytest.mark.skipif(
 cwd = os.path.dirname(os.path.abspath(__file__))
 
 
-@slow
 def test_tutorial():
     def run_py(path):
         print(path)
-        run('cd {}/../examples/tutorial && python3 {}.py'.format(cwd, path),
+        run('cd {}/../examples/tutorials && python3 {}.py'.format(cwd, path),
             shell=True)
 
-    run('cd {}/../examples/tutorial/resize_op && '
+    run('cd {}/../examples/tutorials/resize_op && '
         'mkdir -p build && cd build && cmake -D SCANNER_PATH={} .. && '
         'make'.format(cwd, cwd + '/..'),
         shell=True)
 
     tutorials = [
-        '00_basic', '01_sampling', '02_collections', '03_ops', '04_compression',
-        '05_custom_op'
+        '00_basic', '01_defining_python_ops', '02_op_attributes', '03_sampling', '04_slicing',
+        '05_sources_sinks', '06_compression', '07_profiling', '08_defining_cpp_ops'
     ]
 
     for t in tutorials:
@@ -445,6 +444,24 @@ class TestHistogram:
         tables = db.run(job[0], job[1], force=True, show_progress=False)
         next(tables[0].column('histogram').load(readers.histograms))
 
+@builder
+class TestInplace:
+    def job(self, db, ty):
+        frame = db.sources.FrameColumn()
+        hist = db.ops.Histogram(frame=frame, device=ty)
+        output_op = db.sinks.Column(columns={'histogram': hist})
+
+        job_inplace = Job(op_args={
+            frame: db.table('test1_inplace').column('frame'),
+            output_op: 'test_inplace_hist'
+        })
+
+        return output_op, [job_inplace]
+
+    def run(self, db, job):
+        tables = db.run(job[0], job[1], force=True, show_progress=False)
+        next(tables[0].column('histogram').load(readers.histograms))
+
 
 @builder
 class TestOpticalFlow:
@@ -682,6 +699,30 @@ def test_files_sink(db):
             # Write data
             d, = struct.unpack('=Q', f.read())
             assert d == i
+
+
+def test_python_source(db):
+    # Write test files
+    py_data = [{'{:d}'.format(i): i} for i in range(4)]
+
+    data = db.sources.Python()
+    pass_data = db.ops.Pass(input=data)
+    output_op = db.sinks.Column(columns={'dict': pass_data})
+    job = Job(op_args={
+        data: {
+            'data': pickle.dumps(py_data)
+        },
+        output_op: 'test_python_source',
+    })
+
+    tables = db.run(output_op, [job], force=True, show_progress=False)
+
+    num_rows = 0
+    for i, buf in enumerate(tables[0].column('dict').load()):
+        d = pickle.loads(buf)
+        assert d['{:d}'.format(i)] == i
+        num_rows += 1
+    assert num_rows == 4
 
 
 @scannerpy.register_python_op()
